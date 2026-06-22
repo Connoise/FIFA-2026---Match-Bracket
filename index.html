@@ -33,6 +33,12 @@
   .tname:focus{border-bottom:1px dotted var(--accent)}
   .score{width:38px;text-align:center;background:#0c1428;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 2px;font-size:14px}
   .vs{color:var(--muted);font-size:12px;padding:0 4px;display:flex;align-items:center;gap:3px}
+  .wtl{gap:4px}
+  .wbtn{width:26px;height:26px;border-radius:6px;border:1px solid var(--line);background:#0c1428;color:var(--muted);cursor:pointer;font-size:12px;font-weight:700;padding:0}
+  .wbtn.h.sel{background:#2563eb;color:#fff;border-color:#2563eb}
+  .wbtn.a.sel{background:#2563eb;color:#fff;border-color:#2563eb}
+  .wbtn.d.sel{background:#6b7280;color:#fff;border-color:#6b7280}
+  .wbtn:hover{border-color:var(--accent)}
   .standings{padding:6px 14px 12px}
   table.st{width:100%;border-collapse:collapse;font-size:12.5px}
   table.st th,table.st td{padding:3px 5px;text-align:center;border-bottom:1px solid var(--line)}
@@ -63,12 +69,12 @@
 
 <div class="wrap" id="viewGroups">
   <div class="note">
-    <b>Heads up:</b> Team line-ups and the already-played scores below are a best-effort snapshot (as of 22 Jun 2026) and may be imperfect — every team name, flag and score is <b>editable</b>. Click a team name to rename it; change the flag in the data if needed. Edit any score to change an outcome. Blank scores = not yet played.
-    The knockout seeding uses winners/runners-up/best-thirds in a valid full bracket (a clean standard layout, not FIFA's exact third-place permutation table).
+    <b>How it works:</b> For each match pick the outcome with the three buttons — left <b>W</b> (left team wins), <b>T</b> (tie), right <b>W</b> (right team wins). Click a selected button again to clear it. Completed matches through <b>22 Jun 2026</b> are pre-filled from real results; the rest are yours to predict. Team names are click-to-edit.
+    The knockout seeding uses winners/runners-up/best-thirds in a valid full bracket (a clean standard layout, not FIFA's exact third-place permutation table). Since only Win/Tie/Loss is tracked, group ties break on points → wins → name.
   </div>
   <div class="toolbar">
     <button class="btn sec" onclick="autoFillRandom()">🎲 Auto-fill empty matches (random)</button>
-    <button class="btn sec" onclick="clearScores()">🧹 Clear all scores</button>
+    <button class="btn sec" onclick="clearScores()">🧹 Clear all picks</button>
     <button class="btn" onclick="showTab('bracket')">Build Knockout Bracket →</button>
     <span class="legend">Top 2 of each group + 8 best 3rd-placed teams advance.</span>
   </div>
@@ -105,23 +111,30 @@ const GROUPS = {
   K:[["Portugal","🇵🇹"],["DR Congo","🇨🇩"],["Colombia","🇨🇴"],["Uzbekistan","🇺🇿"]],
   L:[["England","🏴󠁧󠁢󠁥󠁮󠁧󠁿"],["Croatia","🇭🇷"],["Ghana","🇬🇭"],["Panama","🇵🇦"]]
 };
-// Round-robin order: each group plays 6 matches (indices into the 4-team list)
+// Round-robin order: each group plays 6 matches (home = first index, away = second)
 const RR = [[0,1],[2,3],[0,2],[3,1],[0,3],[1,2]];
-// Pre-filled known/best-effort results: GROUP -> { matchIndex(0..5): [homeGoals, awayGoals] }
-const PREFILLED = {
-  A:{0:[2,0], 2:[1,0]},            // Mexico 2-0 S.Africa ; Mexico 1-0 S.Korea
-  B:{2:[6,0], 4:[0,0]},            // Canada 6-0 Qatar ; Canada 0-0 Bosnia
-  J:{0:[3,0], 1:[3,1], 2:[2,0]}    // Argentina 3-0 Algeria ; Austria 3-1 Jordan ; Argentina 2-0 Austria
+// Real completed results as of 22 Jun 2026 (matchdays 1-2 where played).
+// Outcome per RR slot: 'H' = first team won, 'D' = tie, 'A' = second team won.
+const OUTCOMES = {
+  A:{0:'H',1:'H',2:'H',3:'D'},   // MEX>RSA, KOR>CZE, MEX>KOR, CZE 1-1 RSA
+  B:{2:'H',3:'A',4:'D',5:'D'},   // CAN>QAT, SUI>BIH, CAN 1-1 BIH, SUI 1-1 QAT
+  C:{0:'D',1:'A',2:'H',3:'A'},   // BRA 1-1 MAR, SCO>HAI, BRA>HAI, MAR>SCO
+  D:{0:'H',1:'H',2:'H',3:'A'},   // USA>PAR, AUS>TUR, USA>AUS, PAR>TUR
+  E:{0:'H',1:'D',4:'H',5:'H'},   // GER>CIV, ECU 1-1 CUW, GER>CUW, CIV>ECU
+  F:{0:'H',1:'A',4:'D',5:'H'},   // NED>SWE, JPN>TUN, NED 2-2 JPN, SWE>TUN
+  G:{0:'D',1:'D',2:'D',3:'A'},   // BEL 1-1 EGY, IRN 2-2 NZL, BEL 0-0 IRN, EGY>NZL
+  H:{0:'D',1:'D',2:'H',3:'D'},   // ESP 0-0 CPV, KSA 1-1 URU, ESP>KSA, URU 2-2 CPV
+  I:{0:'H',1:'H'},               // FRA>SEN, NOR>IRQ (MD2 in progress)
+  J:{0:'H',1:'H',2:'H'},         // ARG>ALG, AUT>JOR, ARG>AUT (JOR-ALG pending)
+  K:{0:'D',1:'H'},               // POR 1-1 COD, COL>UZB (MD2 pending)
+  L:{0:'H',1:'H'}                // ENG>CRO, GHA>PAN (MD2 pending)
 };
 
-/* state: results[group][matchIdx] = {h:Number|null, a:Number|null} */
+/* state: results[group][matchIdx] = 'H' | 'D' | 'A' | null */
 const results = {};
 const LETTERS = Object.keys(GROUPS);
 LETTERS.forEach(g=>{
-  results[g]=RR.map((_,i)=>{
-    const pf = PREFILLED[g] && PREFILLED[g][i];
-    return pf ? {h:pf[0], a:pf[1]} : {h:null, a:null};
-  });
+  results[g]=RR.map((_,i)=> (OUTCOMES[g] && OUTCOMES[g][i]!==undefined) ? OUTCOMES[g][i] : null );
 });
 
 /* ============================================================
@@ -139,12 +152,13 @@ function renderGroups(){
     let html=`<h3>Group ${g} <span class="pill">${g}</span></h3><div class="matches">`;
     RR.forEach(([hi,ai],mi)=>{
       const r=results[g][mi];
+      const sel=(v)=> r===v?' sel':'';
       html+=`<div class="match">
         <div class="team home"><span class="flag">${teamFlag(g,hi)}</span><span class="tname" contenteditable spellcheck="false" data-g="${g}" data-i="${hi}">${teamName(g,hi)}</span></div>
-        <div class="vs">
-          <input class="score" inputmode="numeric" data-g="${g}" data-m="${mi}" data-s="h" value="${r.h??''}"/>
-          <span>:</span>
-          <input class="score" inputmode="numeric" data-g="${g}" data-m="${mi}" data-s="a" value="${r.a??''}"/>
+        <div class="vs wtl">
+          <button class="wbtn h${sel('H')}" title="${teamName(g,hi)} win" data-g="${g}" data-m="${mi}" data-o="H">W</button>
+          <button class="wbtn d${sel('D')}" title="Tie" data-g="${g}" data-m="${mi}" data-o="D">T</button>
+          <button class="wbtn a${sel('A')}" title="${teamName(g,ai)} win" data-g="${g}" data-m="${mi}" data-o="A">W</button>
         </div>
         <div class="team away"><span class="tname" contenteditable spellcheck="false" data-g="${g}" data-i="${ai}">${teamName(g,ai)}</span><span class="flag">${teamFlag(g,ai)}</span></div>
       </div>`;
@@ -153,13 +167,13 @@ function renderGroups(){
     div.innerHTML=html;
     host.appendChild(div);
   });
-  // wire scores
-  host.querySelectorAll('input.score').forEach(inp=>{
-    inp.addEventListener('input',e=>{
-      const {g,m,s}=e.target.dataset;
-      let v=e.target.value.replace(/[^0-9]/g,'').slice(0,2);
-      e.target.value=v;
-      results[g][m][s]= v===''?null:parseInt(v,10);
+  // wire W/T/L buttons
+  host.querySelectorAll('button.wbtn').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      const {g,m,o}=e.target.dataset;
+      results[g][m]= results[g][m]===o ? null : o;  // click again to clear
+      // update button states in this match row
+      e.target.parentElement.querySelectorAll('.wbtn').forEach(b=>b.classList.toggle('sel', b.dataset.o===results[g][m]));
       renderStandings(g);
     });
   });
@@ -174,49 +188,48 @@ function renderGroups(){
 }
 
 function computeStandings(g){
-  const t=GROUPS[g].map((_,i)=>({i,name:teamName(g,i),flag:teamFlag(g,i),P:0,W:0,D:0,L:0,GF:0,GA:0,Pts:0}));
+  const t=GROUPS[g].map((_,i)=>({i,name:teamName(g,i),flag:teamFlag(g,i),P:0,W:0,D:0,L:0,Pts:0}));
   RR.forEach(([hi,ai],mi)=>{
-    const r=results[g][mi];
-    if(r.h==null||r.a==null) return;
-    t[hi].P++;t[ai].P++;t[hi].GF+=r.h;t[hi].GA+=r.a;t[ai].GF+=r.a;t[ai].GA+=r.h;
-    if(r.h>r.a){t[hi].W++;t[ai].L++;t[hi].Pts+=3;}
-    else if(r.h<r.a){t[ai].W++;t[hi].L++;t[ai].Pts+=3;}
+    const o=results[g][mi];
+    if(!o) return;
+    t[hi].P++;t[ai].P++;
+    if(o==='H'){t[hi].W++;t[ai].L++;t[hi].Pts+=3;}
+    else if(o==='A'){t[ai].W++;t[hi].L++;t[ai].Pts+=3;}
     else{t[hi].D++;t[ai].D++;t[hi].Pts++;t[ai].Pts++;}
   });
-  t.forEach(x=>x.GD=x.GF-x.GA);
-  t.sort((a,b)=> b.Pts-a.Pts || b.GD-a.GD || b.GF-a.GF || a.name.localeCompare(b.name));
+  // No goals tracked -> tiebreak by Points, then Wins, then name (W/T/L tool).
+  t.sort((a,b)=> b.Pts-a.Pts || b.W-a.W || a.name.localeCompare(b.name));
   return t;
 }
 
 function renderStandings(g){
   const t=computeStandings(g);
   const el=document.getElementById('st-'+g);
-  let html=`<table class="st"><tr><th></th><th class="tn">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>`;
+  let html=`<table class="st"><tr><th></th><th class="tn">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr>`;
   t.forEach((x,idx)=>{
     const cls= idx<2?'q':(idx===2?'q3':'');
-    html+=`<tr class="${cls}"><td>${idx+1}</td><td class="tn">${x.flag} ${x.name}</td><td>${x.P}</td><td>${x.W}</td><td>${x.D}</td><td>${x.L}</td><td>${x.GD>0?'+':''}${x.GD}</td><td>${x.Pts}</td></tr>`;
+    html+=`<tr class="${cls}"><td>${idx+1}</td><td class="tn">${x.flag} ${x.name}</td><td>${x.P}</td><td>${x.W}</td><td>${x.D}</td><td>${x.L}</td><td>${x.Pts}</td></tr>`;
   });
   html+=`</table>`;
   el.innerHTML=html;
 }
 
 function autoFillRandom(){
-  LETTERS.forEach(g=>results[g].forEach(r=>{
-    if(r.h==null) r.h=Math.floor(Math.random()*4);
-    if(r.a==null) r.a=Math.floor(Math.random()*4);
+  LETTERS.forEach(g=>results[g].forEach((r,i)=>{
+    if(results[g][i]==null) results[g][i]=['H','D','A'][Math.floor(Math.random()*3)];
   }));
   renderGroups();
 }
 function clearScores(){
-  if(!confirm('Clear ALL scores (including pre-filled played matches)?'))return;
-  LETTERS.forEach(g=>results[g].forEach(r=>{r.h=null;r.a=null;}));
+  if(!confirm('Clear ALL match picks (including the real completed results)?'))return;
+  LETTERS.forEach(g=>results[g].forEach((r,i)=>{results[g][i]=null;}));
   renderGroups();
 }
 
 /* ============================================================
    QUALIFICATION + KNOCKOUT
    ============================================================ */
-function groupComplete(g){return results[g].every(r=>r.h!=null&&r.a!=null);}
+function groupComplete(g){return results[g].every(r=>r!=null);}
 
 function qualifiers(){
   // returns {winners:{A:teamObj}, runners:{A:teamObj}, thirds:[ranked teamObjs with group letter]}
@@ -228,8 +241,8 @@ function qualifiers(){
     runners[g]= attach(t[1],g,done?2:0);
     if(done) thirdsAll.push(attach(t[2],g,3));
   });
-  // rank thirds: Pts, GD, GF
-  thirdsAll.sort((a,b)=> b.Pts-a.Pts || b.GD-a.GD || b.GF-a.GF || a.name.localeCompare(b.name));
+  // rank thirds: Pts, Wins, name (no goals tracked)
+  thirdsAll.sort((a,b)=> b.Pts-a.Pts || b.W-a.W || a.name.localeCompare(b.name));
   const thirds=thirdsAll.slice(0,8);
   return {winners,runners,thirds};
 }
