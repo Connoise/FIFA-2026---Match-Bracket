@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FIFA World Cup 2026 — Match-by-Match Bracket Builder</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#141c33; --panel2:#1b2647; --line:#2c3a63;
+    --accent:#36d399; --accent2:#3b82f6; --text:#e6ecff; --muted:#8da2c8;
+    --win:#1f6f4d; --gold:#f5c542;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";background:var(--bg);color:var(--text)}
+  header{padding:18px 22px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
+  header h1{margin:0;font-size:20px;letter-spacing:.3px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .tabs{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+  .tabs button{background:var(--panel2);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px}
+  .tabs button.active{background:var(--accent2);border-color:var(--accent2)}
+  .wrap{padding:18px 22px;max-width:1400px;margin:0 auto}
+  .note{background:#2a2140;border:1px solid #5a4a8a;color:#e8ddff;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
+  .groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+  .group{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .group h3{margin:0;padding:10px 14px;background:var(--panel2);font-size:15px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+  .matches{padding:8px 10px}
+  .match{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px dashed var(--line)}
+  .match:last-child{border-bottom:none}
+  .team{display:flex;align-items:center;gap:6px;font-size:14px}
+  .team.away{justify-content:flex-end;text-align:right}
+  .flag{font-size:18px}
+  .tname{outline:none;border-bottom:1px dotted transparent}
+  .tname:focus{border-bottom:1px dotted var(--accent)}
+  .score{width:38px;text-align:center;background:#0c1428;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 2px;font-size:14px}
+  .vs{color:var(--muted);font-size:12px;padding:0 4px;display:flex;align-items:center;gap:3px}
+  .standings{padding:6px 14px 12px}
+  table.st{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.st th,table.st td{padding:3px 5px;text-align:center;border-bottom:1px solid var(--line)}
+  table.st td.tn{text-align:left}
+  table.st tr.q td{color:var(--accent);font-weight:600}
+  table.st tr.q3 td{color:var(--gold)}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+  .btn{background:var(--accent);color:#06281b;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600}
+  .btn.sec{background:var(--panel2);color:var(--text);border:1px solid var(--line);font-weight:500}
+  .legend{color:var(--muted);font-size:12px}
+  .thirds{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:16px 0;font-size:13px}
+  .thirds b{color:var(--gold)}
+  #bracketHost{overflow:auto;background:#0a1226;border:1px solid var(--line);border-radius:10px;padding:10px}
+  svg text{font-family:system-ui,"Segoe UI Emoji","Apple Color Emoji"}
+  .hint{color:var(--muted);font-size:12px;margin:10px 0}
+  .pill{font-size:11px;background:#0c1428;border:1px solid var(--line);padding:2px 7px;border-radius:20px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏆 FIFA World Cup 2026 — Match-by-Match Bracket Builder</h1>
+  <p>Pick every result yourself. Group tables, qualifiers and the knockout bracket build automatically. Export the bracket as a PNG.</p>
+  <div class="tabs">
+    <button id="tabGroups" class="active" onclick="showTab('groups')">① Group Stage</button>
+    <button id="tabBracket" onclick="showTab('bracket')">② Knockout Bracket</button>
+  </div>
+</header>
+
+<div class="wrap" id="viewGroups">
+  <div class="note">
+    <b>Heads up:</b> Team line-ups and the already-played scores below are a best-effort snapshot (as of 22 Jun 2026) and may be imperfect — every team name, flag and score is <b>editable</b>. Click a team name to rename it; change the flag in the data if needed. Edit any score to change an outcome. Blank scores = not yet played.
+    The knockout seeding uses winners/runners-up/best-thirds in a valid full bracket (a clean standard layout, not FIFA's exact third-place permutation table).
+  </div>
+  <div class="toolbar">
+    <button class="btn sec" onclick="autoFillRandom()">🎲 Auto-fill empty matches (random)</button>
+    <button class="btn sec" onclick="clearScores()">🧹 Clear all scores</button>
+    <button class="btn" onclick="showTab('bracket')">Build Knockout Bracket →</button>
+    <span class="legend">Top 2 of each group + 8 best 3rd-placed teams advance.</span>
+  </div>
+  <div class="groups" id="groupsHost"></div>
+</div>
+
+<div class="wrap" id="viewBracket" style="display:none">
+  <div class="toolbar">
+    <button class="btn" onclick="exportPng()">⬇️ Export bracket as PNG</button>
+    <button class="btn sec" onclick="showTab('groups')">← Back to Group Stage</button>
+    <button class="btn sec" onclick="resetKnockout()">↺ Reset knockout picks</button>
+    <span class="legend">Click the team you think wins each knockout match — winners advance automatically.</span>
+  </div>
+  <div class="thirds" id="thirdsBox"></div>
+  <div class="hint">Tip: finish enough group matches so all positions are decided, then pick your way to the final.</div>
+  <div id="bracketHost"></div>
+</div>
+
+<script>
+/* ============================================================
+   DATA — edit teams/flags here if any are wrong.
+   ============================================================ */
+const GROUPS = {
+  A:[["Mexico","🇲🇽"],["South Africa","🇿🇦"],["South Korea","🇰🇷"],["Czech Republic","🇨🇿"]],
+  B:[["Canada","🇨🇦"],["Switzerland","🇨🇭"],["Qatar","🇶🇦"],["Bosnia & Herz.","🇧🇦"]],
+  C:[["Brazil","🇧🇷"],["Morocco","🇲🇦"],["Haiti","🇭🇹"],["Scotland","🏴󠁧󠁢󠁳󠁣󠁴󠁿"]],
+  D:[["United States","🇺🇸"],["Paraguay","🇵🇾"],["Australia","🇦🇺"],["Türkiye","🇹🇷"]],
+  E:[["Germany","🇩🇪"],["Ivory Coast","🇨🇮"],["Ecuador","🇪🇨"],["Curaçao","🇨🇼"]],
+  F:[["Netherlands","🇳🇱"],["Sweden","🇸🇪"],["Tunisia","🇹🇳"],["Japan","🇯🇵"]],
+  G:[["Belgium","🇧🇪"],["Egypt","🇪🇬"],["Iran","🇮🇷"],["New Zealand","🇳🇿"]],
+  H:[["Spain","🇪🇸"],["Cape Verde","🇨🇻"],["Saudi Arabia","🇸🇦"],["Uruguay","🇺🇾"]],
+  I:[["France","🇫🇷"],["Senegal","🇸🇳"],["Norway","🇳🇴"],["Iraq","🇮🇶"]],
+  J:[["Argentina","🇦🇷"],["Algeria","🇩🇿"],["Austria","🇦🇹"],["Jordan","🇯🇴"]],
+  K:[["Portugal","🇵🇹"],["DR Congo","🇨🇩"],["Colombia","🇨🇴"],["Uzbekistan","🇺🇿"]],
+  L:[["England","🏴󠁧󠁢󠁥󠁮󠁧󠁿"],["Croatia","🇭🇷"],["Ghana","🇬🇭"],["Panama","🇵🇦"]]
+};
+// Round-robin order: each group plays 6 matches (indices into the 4-team list)
+const RR = [[0,1],[2,3],[0,2],[3,1],[0,3],[1,2]];
+// Pre-filled known/best-effort results: GROUP -> { matchIndex(0..5): [homeGoals, awayGoals] }
+const PREFILLED = {
+  A:{0:[2,0], 2:[1,0]},            // Mexico 2-0 S.Africa ; Mexico 1-0 S.Korea
+  B:{2:[6,0], 4:[0,0]},            // Canada 6-0 Qatar ; Canada 0-0 Bosnia
+  J:{0:[3,0], 1:[3,1], 2:[2,0]}    // Argentina 3-0 Algeria ; Austria 3-1 Jordan ; Argentina 2-0 Austria
+};
+
+/* state: results[group][matchIdx] = {h:Number|null, a:Number|null} */
+const results = {};
+const LETTERS = Object.keys(GROUPS);
+LETTERS.forEach(g=>{
+  results[g]=RR.map((_,i)=>{
+    const pf = PREFILLED[g] && PREFILLED[g][i];
+    return pf ? {h:pf[0], a:pf[1]} : {h:null, a:null};
+  });
+});
+
+/* ============================================================
+   GROUP STAGE UI
+   ============================================================ */
+function teamName(g,i){return GROUPS[g][i][0];}
+function teamFlag(g,i){return GROUPS[g][i][1];}
+
+function renderGroups(){
+  const host=document.getElementById('groupsHost');
+  host.innerHTML='';
+  LETTERS.forEach(g=>{
+    const div=document.createElement('div');
+    div.className='group';
+    let html=`<h3>Group ${g} <span class="pill">${g}</span></h3><div class="matches">`;
+    RR.forEach(([hi,ai],mi)=>{
+      const r=results[g][mi];
+      html+=`<div class="match">
+        <div class="team home"><span class="flag">${teamFlag(g,hi)}</span><span class="tname" contenteditable spellcheck="false" data-g="${g}" data-i="${hi}">${teamName(g,hi)}</span></div>
+        <div class="vs">
+          <input class="score" inputmode="numeric" data-g="${g}" data-m="${mi}" data-s="h" value="${r.h??''}"/>
+          <span>:</span>
+          <input class="score" inputmode="numeric" data-g="${g}" data-m="${mi}" data-s="a" value="${r.a??''}"/>
+        </div>
+        <div class="team away"><span class="tname" contenteditable spellcheck="false" data-g="${g}" data-i="${ai}">${teamName(g,ai)}</span><span class="flag">${teamFlag(g,ai)}</span></div>
+      </div>`;
+    });
+    html+=`</div><div class="standings" id="st-${g}"></div>`;
+    div.innerHTML=html;
+    host.appendChild(div);
+  });
+  // wire scores
+  host.querySelectorAll('input.score').forEach(inp=>{
+    inp.addEventListener('input',e=>{
+      const {g,m,s}=e.target.dataset;
+      let v=e.target.value.replace(/[^0-9]/g,'').slice(0,2);
+      e.target.value=v;
+      results[g][m][s]= v===''?null:parseInt(v,10);
+      renderStandings(g);
+    });
+  });
+  // wire name edits
+  host.querySelectorAll('.tname').forEach(el=>{
+    el.addEventListener('blur',e=>{
+      const {g,i}=e.target.dataset;
+      GROUPS[g][i][0]=e.target.textContent.trim()||GROUPS[g][i][0];
+    });
+  });
+  LETTERS.forEach(renderStandings);
+}
+
+function computeStandings(g){
+  const t=GROUPS[g].map((_,i)=>({i,name:teamName(g,i),flag:teamFlag(g,i),P:0,W:0,D:0,L:0,GF:0,GA:0,Pts:0}));
+  RR.forEach(([hi,ai],mi)=>{
+    const r=results[g][mi];
+    if(r.h==null||r.a==null) return;
+    t[hi].P++;t[ai].P++;t[hi].GF+=r.h;t[hi].GA+=r.a;t[ai].GF+=r.a;t[ai].GA+=r.h;
+    if(r.h>r.a){t[hi].W++;t[ai].L++;t[hi].Pts+=3;}
+    else if(r.h<r.a){t[ai].W++;t[hi].L++;t[ai].Pts+=3;}
+    else{t[hi].D++;t[ai].D++;t[hi].Pts++;t[ai].Pts++;}
+  });
+  t.forEach(x=>x.GD=x.GF-x.GA);
+  t.sort((a,b)=> b.Pts-a.Pts || b.GD-a.GD || b.GF-a.GF || a.name.localeCompare(b.name));
+  return t;
+}
+
+function renderStandings(g){
+  const t=computeStandings(g);
+  const el=document.getElementById('st-'+g);
+  let html=`<table class="st"><tr><th></th><th class="tn">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>`;
+  t.forEach((x,idx)=>{
+    const cls= idx<2?'q':(idx===2?'q3':'');
+    html+=`<tr class="${cls}"><td>${idx+1}</td><td class="tn">${x.flag} ${x.name}</td><td>${x.P}</td><td>${x.W}</td><td>${x.D}</td><td>${x.L}</td><td>${x.GD>0?'+':''}${x.GD}</td><td>${x.Pts}</td></tr>`;
+  });
+  html+=`</table>`;
+  el.innerHTML=html;
+}
+
+function autoFillRandom(){
+  LETTERS.forEach(g=>results[g].forEach(r=>{
+    if(r.h==null) r.h=Math.floor(Math.random()*4);
+    if(r.a==null) r.a=Math.floor(Math.random()*4);
+  }));
+  renderGroups();
+}
+function clearScores(){
+  if(!confirm('Clear ALL scores (including pre-filled played matches)?'))return;
+  LETTERS.forEach(g=>results[g].forEach(r=>{r.h=null;r.a=null;}));
+  renderGroups();
+}
+
+/* ============================================================
+   QUALIFICATION + KNOCKOUT
+   ============================================================ */
+function groupComplete(g){return results[g].every(r=>r.h!=null&&r.a!=null);}
+
+function qualifiers(){
+  // returns {winners:{A:teamObj}, runners:{A:teamObj}, thirds:[ranked teamObjs with group letter]}
+  const winners={},runners={},thirdsAll=[];
+  LETTERS.forEach(g=>{
+    const t=computeStandings(g);
+    const done=groupComplete(g);
+    winners[g]= attach(t[0],g,done?1:0);
+    runners[g]= attach(t[1],g,done?2:0);
+    if(done) thirdsAll.push(attach(t[2],g,3));
+  });
+  // rank thirds: Pts, GD, GF
+  thirdsAll.sort((a,b)=> b.Pts-a.Pts || b.GD-a.GD || b.GF-a.GF || a.name.localeCompare(b.name));
+  const thirds=thirdsAll.slice(0,8);
+  return {winners,runners,thirds};
+}
+function attach(x,g,pos){ return x?{...x,group:g,pos}:null; }
+
+// Knockout structure: 16 R32 matches -> binary tree to final.
+// Leaf slots reference qualifier slots. Thirds T1..T8 filled by best-thirds ranking.
+const R32_SLOTS = [
+  // top half (8)
+  [['1','A'],['2','B']], [['1','C'],['2','D']], [['1','E'],['2','F']], [['1','G'],['2','H']],
+  [['1','I'],['2','J']], [['1','K'],['2','L']], [['T',0],['T',2]], [['T',4],['T',6]],
+  // bottom half (8)
+  [['1','B'],['2','A']], [['1','D'],['2','C']], [['1','F'],['2','E']], [['1','H'],['2','G']],
+  [['1','J'],['2','I']], [['1','L'],['2','K']], [['T',1],['T',3]], [['T',5],['T',7]]
+];
+
+let KO=null; // knockout tree state
+function buildKnockout(){
+  const q=qualifiers();
+  function resolve(slot){
+    const [kind,key]=slot;
+    if(kind==='1'){ const t=q.winners[key]; return t?{...t,label:teamName(key,t.i)} : {placeholder:'Winner Grp '+key}; }
+    if(kind==='2'){ const t=q.runners[key]; return t?{...t} : {placeholder:'Runner-up Grp '+key}; }
+    // third
+    const t=q.thirds[key]; return t?{...t} : {placeholder:'3rd place #'+(key+1)};
+  }
+  // preserve existing winner picks if rebuilding? simpler: reset picks but keep if identical
+  const prevPicks = KO?KO.picks:{};
+  const r32 = R32_SLOTS.map((m,idx)=>({
+    id:'r32-'+idx, a:resolve(m[0]), b:resolve(m[1])
+  }));
+  KO={ r32, picks:prevPicks };
+}
+
+function teamsEqual(x,y){ return x&&y&&!x.placeholder&&!y.placeholder&&x.name===y.name&&x.group===y.group; }
+
+// compute participants of each round from picks
+function roundTeams(){
+  // returns object: r32(array of {a,b}), r16(8 winners->4 matches), etc.
+  const get=(id,t)=>{
+    const w=KO.picks[id];
+    if(w==='a')return t.a; if(w==='b')return t.b; return null;
+  };
+  const r32=KO.r32;
+  const r16=[]; for(let i=0;i<8;i++){ r16.push({id:'r16-'+i, a:get(r32[2*i].id,r32[2*i]), b:get(r32[2*i+1].id,r32[2*i+1])}); }
+  const qf=[]; for(let i=0;i<4;i++){ qf.push({id:'qf-'+i, a:get(r16[2*i].id,r16[2*i]), b:get(r16[2*i+1].id,r16[2*i+1])}); }
+  const sf=[]; for(let i=0;i<2;i++){ sf.push({id:'sf-'+i, a:get(qf[2*i].id,qf[2*i]), b:get(qf[2*i+1].id,qf[2*i+1])}); }
+  const fin=[{id:'fin-0', a:get(sf[0].id,sf[0]), b:get(sf[1].id,sf[1])}];
+  const champPick=KO.picks['fin-0'];
+  const champ= champPick==='a'?fin[0].a:champPick==='b'?fin[0].b:null;
+  return {r32,r16,qf,sf,fin,champ};
+}
+
+function pick(matchId, side){
+  KO.picks[matchId]=side;
+  // clear downstream picks that depend on this (simplest: clear all later rounds whose source changed)
+  // Easy approach: just re-render; stale downstream picks may reference replaced teams but get overwritten on next pick.
+  renderBracket();
+}
+function resetKnockout(){ if(KO){KO.picks={};} renderBracket(); }
+
+/* ============================================================
+   BRACKET RENDER (SVG)  — also used for PNG export
+   ============================================================ */
+const BOX_W=178, BOX_H=46, ROW=70;
+function buildSvg(){
+  const R=roundTeams();
+  // x columns: left R32,R16,QF,SF ; center final ; right SF,QF,R16,R32
+  const colX=[20, 20+ (BOX_W+44), 20+2*(BOX_W+44), 20+3*(BOX_W+44)];
+  const finalX=20+3.5*(BOX_W+44)+30;
+  const totalW= finalX*2 - 20 - BOX_W + 40 + 60;
+  const W = colX[3] + BOX_W + 4*(BOX_W+44) - (BOX_W+44) + 40; // recompute below cleanly
+  // We'll lay out explicitly.
+  const leftR32y = R.r32.slice(0,8).map((_,i)=>i*ROW+30);
+  // helper to average children y
+  function parentY(ys){ return ys.map((_,i)=> (ys[2*i]+ys[2*i+1])/2 ); }
+  const leftR16y=parentY(leftR32y);
+  const leftQFy=parentY(leftR16y);
+  const leftSFy=parentY(leftQFy);
+  const rightR32y=R.r32.slice(8,16).map((_,i)=>i*ROW+30);
+  const rightR16y=parentY(rightR32y);
+  const rightQFy=parentY(rightR16y);
+  const rightSFy=parentY(rightQFy);
+  const height=8*ROW+60;
+
+  const LX=[20, 20+BOX_W+50, 20+2*(BOX_W+50), 20+3*(BOX_W+50)];
+  const fX=20+4*(BOX_W+50)+10;
+  const RX=[fX+BOX_W+50+3*(BOX_W+50), 0,0,0]; // we mirror
+  const rcol=[ fX+BOX_W+50+3*(BOX_W+50), fX+BOX_W+50+2*(BOX_W+50), fX+BOX_W+50+(BOX_W+50), fX+BOX_W+50 ];
+  const width= rcol[0]+BOX_W+30;
+  const finalY=height/2-BOX_H/2-30;
+
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height+90}" viewBox="0 0 ${width} ${height+90}" font-size="13">`;
+  s+=`<rect x="0" y="0" width="${width}" height="${height+90}" fill="#0a1226"/>`;
+  s+=`<text x="${width/2}" y="30" fill="#e6ecff" font-size="22" font-weight="700" text-anchor="middle">FIFA World Cup 2026 — Knockout Bracket</text>`;
+  const offY=46;
+
+  const boxes=[]; // collect for click overlay {x,y,id,side}
+  function drawMatch(x,y,m,anchorRight){
+    const w= m.a, l=m.b;
+    const win=KO.picks[m.id];
+    s+=drawTeam(x,y,m.a,win==='a',m.id,'a');
+    s+=drawTeam(x,y+BOX_H/2,m.b,win==='b',m.id,'b');
+    s+=`<rect x="${x}" y="${y}" width="${BOX_W}" height="${BOX_H}" fill="none" stroke="#2c3a63"/>`;
+    s+=`<line x1="${x}" y1="${y+BOX_H/2}" x2="${x+BOX_W}" y2="${y+BOX_H/2}" stroke="#2c3a63"/>`;
+    boxes.push({x,y,id:m.id,side:'a'});boxes.push({x,y:y+BOX_H/2,id:m.id,side:'b'});
+  }
+  function label(t){
+    if(!t) return ['','',''];
+    if(t.placeholder) return ['', t.placeholder, ''];
+    return [t.flag||'', t.name||t.label||'', ''];
+  }
+  function drawTeam(x,y,t,isWin,id,side){
+    const [flag,name]=label(t);
+    const fill= isWin? '#16633f' : '#101a30';
+    const tcol= t&&!t.placeholder? '#e6ecff':'#7c8db5';
+    let r=`<g><rect x="${x}" y="${y}" width="${BOX_W}" height="${BOX_H/2}" fill="${fill}"/>`;
+    r+=`<text x="${x+8}" y="${y+BOX_H/4+4}" fill="${tcol}">${esc(flag)} ${esc(truncate(name,16))}</text></g>`;
+    return r;
+  }
+  function connect(x1,y1,x2,y2){ s+=`<path d="M${x1},${y1} H${(x1+x2)/2} V${y2} H${x2}" fill="none" stroke="#3a4a78"/>`; }
+
+  // LEFT side
+  const Ly=[leftR32y,leftR16y,leftQFy,leftSFy];
+  const Lrounds=[R.r32.slice(0,8),R.r16.slice(0,4),R.qf.slice(0,2),R.sf.slice(0,1)];
+  for(let c=0;c<4;c++){
+    Lrounds[c].forEach((m,i)=> drawMatch(LX[c], Ly[c][i]+offY, m, false));
+    if(c<3){ // connectors to next col
+      Lrounds[c+1].forEach((_,i)=>{
+        const ya=Ly[c][2*i]+offY+BOX_H/2, yb=Ly[c][2*i+1]+offY+BOX_H/2;
+        const xr=LX[c]+BOX_W, xn=LX[c+1];
+        connect(xr,ya,xn,Ly[c+1][i]+offY+BOX_H/2);
+        connect(xr,yb,xn,Ly[c+1][i]+offY+BOX_H/2);
+      });
+    }
+  }
+  // RIGHT side
+  const Ry=[rightR32y,rightR16y,rightQFy,rightSFy];
+  const Rrounds=[R.r32.slice(8,16),R.r16.slice(4,8),R.qf.slice(2,4),R.sf.slice(1,2)];
+  for(let c=0;c<4;c++){
+    Rrounds[c].forEach((m,i)=> drawMatch(rcol[c], Ry[c][i]+offY, m, true));
+    if(c<3){
+      Rrounds[c+1].forEach((_,i)=>{
+        const ya=Ry[c][2*i]+offY+BOX_H/2, yb=Ry[c][2*i+1]+offY+BOX_H/2;
+        const xl=rcol[c], xn=rcol[c+1]+BOX_W;
+        connect(xl,ya,xn,Ry[c+1][i]+offY+BOX_H/2);
+        connect(xl,yb,xn,Ry[c+1][i]+offY+BOX_H/2);
+      });
+    }
+  }
+  // FINAL center
+  const finM=R.fin[0];
+  drawMatch(fX, finalY+offY, finM, false);
+  s+=`<text x="${fX+BOX_W/2}" y="${finalY+offY-8}" fill="#f5c542" font-size="14" font-weight="700" text-anchor="middle">FINAL</text>`;
+  // connectors SF->final
+  connect(LX[3]+BOX_W, leftSFy[0]+offY+BOX_H/2, fX, finalY+offY+BOX_H/2);
+  connect(rcol[3], rightSFy[0]+offY+BOX_H/2, fX+BOX_W, finalY+offY+BOX_H/2);
+  // champion
+  const champ=R.champ;
+  const cy=finalY+offY+BOX_H+34;
+  s+=`<text x="${fX+BOX_W/2}" y="${cy}" fill="#f5c542" font-size="15" font-weight="700" text-anchor="middle">🏆 ${champ&&!champ.placeholder?esc((champ.flag||'')+' '+champ.name):'Champion'}</text>`;
+
+  // round headers
+  const heads=['Round of 32','Round of 16','Quarter-final','Semi-final'];
+  heads.forEach((h,c)=>{
+    s+=`<text x="${LX[c]+BOX_W/2}" y="${offY-6}" fill="#8da2c8" text-anchor="middle" font-size="11">${h}</text>`;
+    s+=`<text x="${rcol[c]+BOX_W/2}" y="${offY-6}" fill="#8da2c8" text-anchor="middle" font-size="11">${h}</text>`;
+  });
+
+  s+=`</svg>`;
+  return {svg:s,width,height:height+90,boxes};
+}
+function truncate(s,n){ s=s||''; return s.length>n? s.slice(0,n-1)+'…':s; }
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderThirds(){
+  const q=qualifiers();
+  const box=document.getElementById('thirdsBox');
+  const done=LETTERS.filter(groupComplete).length;
+  let html=`<b>Best 3rd-placed teams</b> &nbsp;<span class="legend">(${done}/12 groups complete; need all 12 for final 8)</span><br>`;
+  if(q.thirds.length===0){ html+='<span class="legend">Complete groups to rank third-placed teams.</span>'; }
+  else html+= q.thirds.map((t,i)=>`${i+1}. ${t.flag} ${t.name} <span class="legend">(Grp ${t.group}, ${t.Pts}pts)</span>`).join(' &nbsp;•&nbsp; ');
+  box.innerHTML=html;
+}
+
+let lastSvg=null;
+function renderBracket(){
+  if(!KO) buildKnockout(); else buildKnockout(); // rebuild from latest group results, keep picks
+  renderThirds();
+  const {svg,boxes,width,height}=buildSvg();
+  lastSvg=svg;
+  const host=document.getElementById('bracketHost');
+  host.innerHTML=svg;
+  // overlay clickable rects
+  const svgEl=host.querySelector('svg');
+  boxes.forEach(b=>{
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x',b.x);rect.setAttribute('y',b.y);
+    rect.setAttribute('width',BOX_W);rect.setAttribute('height',BOX_H/2);
+    rect.setAttribute('fill','transparent');rect.style.cursor='pointer';
+    rect.addEventListener('click',()=>pick(b.id,b.side));
+    svgEl.appendChild(rect);
+  });
+}
+
+function exportPng(){
+  if(!lastSvg) renderBracket();
+  const svg=lastSvg;
+  const m=svg.match(/width="(\d+)" height="(\d+)"/);
+  const w=parseInt(m[1]),h=parseInt(m[2]);
+  const scale=2;
+  const img=new Image();
+  const blob=new Blob([svg],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  img.onload=()=>{
+    const c=document.createElement('canvas');
+    c.width=w*scale;c.height=h*scale;
+    const ctx=c.getContext('2d');
+    ctx.scale(scale,scale);
+    ctx.drawImage(img,0,0);
+    URL.revokeObjectURL(url);
+    c.toBlob(b=>{
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(b);
+      a.download='fifa-2026-bracket.png';
+      a.click();
+    },'image/png');
+  };
+  img.onerror=()=>alert('Export failed to render. Try a different browser.');
+  img.src=url;
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+function showTab(t){
+  document.getElementById('viewGroups').style.display = t==='groups'?'block':'none';
+  document.getElementById('viewBracket').style.display = t==='bracket'?'block':'none';
+  document.getElementById('tabGroups').classList.toggle('active',t==='groups');
+  document.getElementById('tabBracket').classList.toggle('active',t==='bracket');
+  if(t==='bracket') renderBracket();
+}
+
+renderGroups();
+</script>
+</body>
+</html>
