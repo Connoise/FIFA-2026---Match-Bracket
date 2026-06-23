@@ -24,8 +24,13 @@
   .group{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
   .group h3{margin:0;padding:10px 14px;background:var(--panel2);font-size:15px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
   .matches{padding:8px 10px}
-  .match{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px dashed var(--line)}
-  .match:last-child{border-bottom:none}
+  .matchwrap{padding:5px 4px;border-bottom:1px dashed var(--line)}
+  .matchwrap:last-child{border-bottom:none}
+  .matchwrap.completed{background:#0e1f1a}
+  .mdrow{margin-bottom:3px}
+  .mdate{font-size:10.5px;color:var(--muted);background:#0c1428;border:1px solid var(--line);padding:1px 7px;border-radius:20px}
+  .mdate.ft{color:#9bf0c4;background:#123026;border-color:#1f6f4d}
+  .match{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px}
   .team{display:flex;align-items:center;gap:6px;font-size:14px}
   .team.away{justify-content:flex-end;text-align:right}
   .flag{font-size:18px}
@@ -69,8 +74,8 @@
 
 <div class="wrap" id="viewGroups">
   <div class="note">
-    <b>How it works:</b> For each match pick the outcome with the three buttons — left <b>W</b> (left team wins), <b>T</b> (tie), right <b>W</b> (right team wins). Click a selected button again to clear it. Completed matches through <b>22 Jun 2026</b> are pre-filled from real results; the rest are yours to predict. Team names are click-to-edit.
-    The knockout seeding uses winners/runners-up/best-thirds in a valid full bracket (a clean standard layout, not FIFA's exact third-place permutation table). Since only Win/Tie/Loss is tracked, group ties break on points → wins → name.
+    <b>How it works:</b> For each match pick the outcome with the three buttons — left <b>W</b> (left team wins), <b>T</b> (tie), right <b>W</b> (right team wins). Click a selected button again to clear it. The date is shown above each match; matches already played (through <b>22 Jun 2026</b>) are marked <span style="color:#9bf0c4">✓ Full-time</span> and pre-filled from real results. Team names are click-to-edit.
+    The knockout bracket follows FIFA's <b>official</b> match numbering and slot rules (M73–M104), including the third-place group restrictions; the 8 best thirds are matched into their allowed slots automatically. A position fills once it's mathematically decided (and always once you've predicted the whole group). Since only Win/Tie/Loss is tracked, group ties break on points → wins → name.
   </div>
   <div class="toolbar">
     <button class="btn sec" onclick="autoFillRandom()">🎲 Auto-fill empty matches (random)</button>
@@ -130,10 +135,31 @@ const OUTCOMES = {
   L:{0:'H',1:'H'}                // ENG>CRO, GHA>PAN (MD2 pending)
 };
 
+// Match dates by RR slot (matchday 1 = slots 0,1 / MD2 = 2,3 / MD3 = 4,5).
+// Best-effort dates as of 22 Jun 2026; exact kick-off times for the group
+// stage weren't reliably available, so dates are shown (editable here).
+const GDATE={
+  A:['06/11','06/11','06/18','06/18','06/24','06/24'],
+  B:['06/12','06/12','06/18','06/18','06/24','06/24'],
+  C:['06/13','06/13','06/19','06/19','06/24','06/24'],
+  D:['06/12','06/13','06/19','06/19','06/25','06/25'],
+  E:['06/14','06/14','06/20','06/20','06/25','06/25'],
+  F:['06/14','06/14','06/20','06/20','06/25','06/25'],
+  G:['06/15','06/15','06/21','06/21','06/26','06/26'],
+  H:['06/15','06/15','06/21','06/21','06/26','06/26'],
+  I:['06/16','06/16','06/22','06/22','06/27','06/27'],
+  J:['06/16','06/16','06/22','06/22','06/27','06/27'],
+  K:['06/17','06/17','06/23','06/23','06/27','06/27'],
+  L:['06/17','06/17','06/23','06/23','06/27','06/27']
+};
+// Which matches were actually completed in real life (for the "FT" label colour)
+const COMPLETED={};
+
 /* state: results[group][matchIdx] = 'H' | 'D' | 'A' | null */
 const results = {};
 const LETTERS = Object.keys(GROUPS);
 LETTERS.forEach(g=>{
+  COMPLETED[g]=new Set(Object.keys(OUTCOMES[g]||{}).map(Number));
   results[g]=RR.map((_,i)=> (OUTCOMES[g] && OUTCOMES[g][i]!==undefined) ? OUTCOMES[g][i] : null );
 });
 
@@ -153,7 +179,13 @@ function renderGroups(){
     RR.forEach(([hi,ai],mi)=>{
       const r=results[g][mi];
       const sel=(v)=> r===v?' sel':'';
-      html+=`<div class="match">
+      const done=COMPLETED[g].has(mi);
+      const dateLbl= done
+        ? `<span class="mdate ft">${GDATE[g][mi]}/2026 · ✓ Full-time</span>`
+        : `<span class="mdate">${GDATE[g][mi]}/2026 · upcoming</span>`;
+      html+=`<div class="matchwrap${done?' completed':''}">
+        <div class="mdrow">${dateLbl}</div>
+        <div class="match">
         <div class="team home"><span class="flag">${teamFlag(g,hi)}</span><span class="tname" contenteditable spellcheck="false" data-g="${g}" data-i="${hi}">${teamName(g,hi)}</span></div>
         <div class="vs wtl">
           <button class="wbtn h${sel('H')}" title="${teamName(g,hi)} win" data-g="${g}" data-m="${mi}" data-o="H">W</button>
@@ -161,6 +193,7 @@ function renderGroups(){
           <button class="wbtn a${sel('A')}" title="${teamName(g,ai)} win" data-g="${g}" data-m="${mi}" data-o="A">W</button>
         </div>
         <div class="team away"><span class="tname" contenteditable spellcheck="false" data-g="${g}" data-i="${ai}">${teamName(g,ai)}</span><span class="flag">${teamFlag(g,ai)}</span></div>
+        </div>
       </div>`;
     });
     html+=`</div><div class="standings" id="st-${g}"></div>`;
@@ -187,10 +220,11 @@ function renderGroups(){
   LETTERS.forEach(renderStandings);
 }
 
-function computeStandings(g){
+function computeStandings(g){ return computeStandingsFrom(g, results[g]); }
+function computeStandingsFrom(g, arr){
   const t=GROUPS[g].map((_,i)=>({i,name:teamName(g,i),flag:teamFlag(g,i),P:0,W:0,D:0,L:0,Pts:0}));
   RR.forEach(([hi,ai],mi)=>{
-    const o=results[g][mi];
+    const o=arr[mi];
     if(!o) return;
     t[hi].P++;t[ai].P++;
     if(o==='H'){t[hi].W++;t[ai].L++;t[hi].Pts+=3;}
@@ -231,219 +265,281 @@ function clearScores(){
    ============================================================ */
 function groupComplete(g){return results[g].every(r=>r!=null);}
 
-function qualifiers(){
-  // returns {winners:{A:teamObj}, runners:{A:teamObj}, thirds:[ranked teamObjs with group letter]}
-  const winners={},runners={},thirdsAll=[];
-  LETTERS.forEach(g=>{
-    const t=computeStandings(g);
-    const done=groupComplete(g);
-    winners[g]= attach(t[0],g,done?1:0);
-    runners[g]= attach(t[1],g,done?2:0);
-    if(done) thirdsAll.push(attach(t[2],g,3));
-  });
-  // rank thirds: Pts, Wins, name (no goals tracked)
-  thirdsAll.sort((a,b)=> b.Pts-a.Pts || b.W-a.W || a.name.localeCompare(b.name));
-  const thirds=thirdsAll.slice(0,8);
-  return {winners,runners,thirds};
-}
-function attach(x,g,pos){ return x?{...x,group:g,pos}:null; }
-
-// Knockout structure: 16 R32 matches -> binary tree to final.
-// Leaf slots reference qualifier slots. Thirds T1..T8 filled by best-thirds ranking.
-const R32_SLOTS = [
-  // top half (8)
-  [['1','A'],['2','B']], [['1','C'],['2','D']], [['1','E'],['2','F']], [['1','G'],['2','H']],
-  [['1','I'],['2','J']], [['1','K'],['2','L']], [['T',0],['T',2]], [['T',4],['T',6]],
-  // bottom half (8)
-  [['1','B'],['2','A']], [['1','D'],['2','C']], [['1','F'],['2','E']], [['1','H'],['2','G']],
-  [['1','J'],['2','I']], [['1','L'],['2','K']], [['T',1],['T',3]], [['T',5],['T',7]]
-];
-
-let KO=null; // knockout tree state
-function buildKnockout(){
-  const q=qualifiers();
-  function resolve(slot){
-    const [kind,key]=slot;
-    if(kind==='1'){ const t=q.winners[key]; return t?{...t,label:teamName(key,t.i)} : {placeholder:'Winner Grp '+key}; }
-    if(kind==='2'){ const t=q.runners[key]; return t?{...t} : {placeholder:'Runner-up Grp '+key}; }
-    // third
-    const t=q.thirds[key]; return t?{...t} : {placeholder:'3rd place #'+(key+1)};
+/* A group position is only "decided" when it is the same team across every
+   possible outcome of the remaining matches (ties on pts+wins stay undecided,
+   since with W/T/L there is no goal difference to separate them). */
+function clinchedPositions(g){
+  const unfilled=[]; results[g].forEach((r,i)=>{ if(r==null) unfilled.push(i); });
+  const sets=[new Set(),new Set(),new Set(),new Set()];
+  const OUT=['H','D','A'];
+  const combos=Math.pow(3, unfilled.length);
+  for(let c=0;c<combos;c++){
+    let cc=c; const arr=results[g].slice();
+    for(const idx of unfilled){ arr[idx]=OUT[cc%3]; cc=(cc-cc%3)/3; }
+    const table=computeStandingsFrom(g,arr);
+    let i=0;
+    while(i<4){ // teams tied on pts+wins could occupy any spot in their band
+      let j=i; while(j+1<4 && table[j+1].Pts===table[i].Pts && table[j+1].W===table[i].W) j++;
+      for(let p=i;p<=j;p++) for(let q=i;q<=j;q++) sets[p].add(table[q].i);
+      i=j+1;
+    }
   }
-  // preserve existing winner picks if rebuilding? simpler: reset picks but keep if identical
-  const prevPicks = KO?KO.picks:{};
-  const r32 = R32_SLOTS.map((m,idx)=>({
-    id:'r32-'+idx, a:resolve(m[0]), b:resolve(m[1])
-  }));
-  KO={ r32, picks:prevPicks };
+  return sets.map(s=> s.size===1 ? [...s][0] : null);
+}
+function mkTeam(g,idx,code){
+  const s=computeStandings(g).find(x=>x.i===idx);
+  return {name:teamName(g,idx),flag:teamFlag(g,idx),group:g,code,Pts:s.Pts,W:s.W};
+}
+function qualInfo(){
+  const winner={},runner={},thirdByGroup={};
+  LETTERS.forEach(g=>{
+    if(groupComplete(g)){
+      // group decided -> fill all three positions by final standings order
+      const t=computeStandings(g);
+      winner[g]=mkTeam(g,t[0].i,'1'+g);
+      runner[g]=mkTeam(g,t[1].i,'2'+g);
+      thirdByGroup[g]=mkTeam(g,t[2].i,'3'+g);
+    } else {
+      // mid-group: only show a team once its position is mathematically clinched
+      const cl=clinchedPositions(g);
+      if(cl[0]!=null) winner[g]=mkTeam(g,cl[0],'1'+g);
+      if(cl[1]!=null) runner[g]=mkTeam(g,cl[1],'2'+g);
+      if(cl[2]!=null) thirdByGroup[g]=mkTeam(g,cl[2],'3'+g);
+    }
+  });
+  let thirds=null;
+  if(LETTERS.every(groupComplete)){ // all groups predicted -> lock the best 8 thirds
+    thirds=LETTERS.map(g=>({...thirdByGroup[g]}))
+      .sort((a,b)=> b.Pts-a.Pts || b.W-a.W || a.name.localeCompare(b.name)).slice(0,8);
+  }
+  return {winner,runner,thirds};
 }
 
-function teamsEqual(x,y){ return x&&y&&!x.placeholder&&!y.placeholder&&x.name===y.name&&x.group===y.group; }
+// Official FIFA 2026 knockout structure (match numbers, slots, dates/times).
+// Third-place slots are restricted to specific groups per FIFA's table.
+const THIRD_SLOTS=[
+  {n:74, allow:['A','B','C','D','F']}, {n:77, allow:['C','D','F','G','H']},
+  {n:79, allow:['C','E','F','H','I']}, {n:80, allow:['E','H','I','J','K']},
+  {n:81, allow:['B','E','F','I','J']}, {n:82, allow:['A','E','H','I','J']},
+  {n:85, allow:['E','F','G','I','J']}, {n:87, allow:['D','E','I','J','L']}
+];
+const THIRD_CODE={}; THIRD_SLOTS.forEach(s=>THIRD_CODE[s.n]='3'+s.allow.join(''));
 
-// compute participants of each round from picks
-function roundTeams(){
-  // returns object: r32(array of {a,b}), r16(8 winners->4 matches), etc.
-  const get=(id,t)=>{
-    const w=KO.picks[id];
-    if(w==='a')return t.a; if(w==='b')return t.b; return null;
-  };
-  const r32=KO.r32;
-  const r16=[]; for(let i=0;i<8;i++){ r16.push({id:'r16-'+i, a:get(r32[2*i].id,r32[2*i]), b:get(r32[2*i+1].id,r32[2*i+1])}); }
-  const qf=[]; for(let i=0;i<4;i++){ qf.push({id:'qf-'+i, a:get(r16[2*i].id,r16[2*i]), b:get(r16[2*i+1].id,r16[2*i+1])}); }
-  const sf=[]; for(let i=0;i<2;i++){ sf.push({id:'sf-'+i, a:get(qf[2*i].id,qf[2*i]), b:get(qf[2*i+1].id,qf[2*i+1])}); }
-  const fin=[{id:'fin-0', a:get(sf[0].id,sf[0]), b:get(sf[1].id,sf[1])}];
-  const champPick=KO.picks['fin-0'];
-  const champ= champPick==='a'?fin[0].a:champPick==='b'?fin[0].b:null;
-  return {r32,r16,qf,sf,fin,champ};
+const KO_DEF=[
+  // Round of 32
+  {n:73,r:'R32',a:{t:'2',g:'A'},b:{t:'2',g:'B'},dt:'06/28/2026 09:00'},
+  {n:74,r:'R32',a:{t:'1',g:'E'},b:{t:'3'},        dt:'06/29/2026 10:30'},
+  {n:75,r:'R32',a:{t:'1',g:'F'},b:{t:'2',g:'C'},  dt:'06/29/2026 15:00'},
+  {n:76,r:'R32',a:{t:'1',g:'C'},b:{t:'2',g:'F'},  dt:'06/29/2026 07:00'},
+  {n:77,r:'R32',a:{t:'1',g:'I'},b:{t:'3'},        dt:'06/30/2026 11:00'},
+  {n:78,r:'R32',a:{t:'2',g:'E'},b:{t:'2',g:'I'},  dt:'06/30/2026 07:00'},
+  {n:79,r:'R32',a:{t:'1',g:'A'},b:{t:'3'},        dt:'06/30/2026 15:00'},
+  {n:80,r:'R32',a:{t:'1',g:'L'},b:{t:'3'},        dt:'07/01/2026 06:00'},
+  {n:81,r:'R32',a:{t:'1',g:'D'},b:{t:'3'},        dt:'07/01/2026 14:00'},
+  {n:82,r:'R32',a:{t:'1',g:'G'},b:{t:'3'},        dt:'07/01/2026 10:00'},
+  {n:83,r:'R32',a:{t:'2',g:'K'},b:{t:'2',g:'L'},  dt:'07/02/2026 13:00'},
+  {n:84,r:'R32',a:{t:'1',g:'H'},b:{t:'2',g:'J'},  dt:'07/02/2026 09:00'},
+  {n:85,r:'R32',a:{t:'1',g:'B'},b:{t:'3'},        dt:'07/02/2026 17:00'},
+  {n:86,r:'R32',a:{t:'1',g:'J'},b:{t:'2',g:'H'},  dt:'07/03/2026 12:00'},
+  {n:87,r:'R32',a:{t:'1',g:'K'},b:{t:'3'},        dt:'07/03/2026 15:30'},
+  {n:88,r:'R32',a:{t:'2',g:'D'},b:{t:'2',g:'G'},  dt:'07/03/2026 08:00'},
+  // Round of 16
+  {n:89,r:'R16',a:{t:'W',m:74},b:{t:'W',m:77},dt:'07/04/2026 11:00'},
+  {n:90,r:'R16',a:{t:'W',m:73},b:{t:'W',m:75},dt:'07/04/2026 07:00'},
+  {n:91,r:'R16',a:{t:'W',m:76},b:{t:'W',m:78},dt:'07/05/2026 10:00'},
+  {n:92,r:'R16',a:{t:'W',m:79},b:{t:'W',m:80},dt:'07/05/2026 14:00'},
+  {n:93,r:'R16',a:{t:'W',m:83},b:{t:'W',m:84},dt:'07/06/2026 09:00'},
+  {n:94,r:'R16',a:{t:'W',m:81},b:{t:'W',m:82},dt:'07/06/2026 14:00'},
+  {n:95,r:'R16',a:{t:'W',m:86},b:{t:'W',m:88},dt:'07/07/2026 06:00'},
+  {n:96,r:'R16',a:{t:'W',m:85},b:{t:'W',m:87},dt:'07/07/2026 10:00'},
+  // Quarter-finals
+  {n:97, r:'QF',a:{t:'W',m:89},b:{t:'W',m:90},dt:'07/09/2026 10:00'},
+  {n:98, r:'QF',a:{t:'W',m:93},b:{t:'W',m:94},dt:'07/10/2026 09:00'},
+  {n:99, r:'QF',a:{t:'W',m:91},b:{t:'W',m:92},dt:'07/11/2026 11:00'},
+  {n:100,r:'QF',a:{t:'W',m:95},b:{t:'W',m:96},dt:'07/11/2026 15:00'},
+  // Semi-finals
+  {n:101,r:'SF',a:{t:'W',m:97},b:{t:'W',m:98},  dt:'07/14/2026 09:00'},
+  {n:102,r:'SF',a:{t:'W',m:99},b:{t:'W',m:100}, dt:'07/15/2026 09:00'},
+  // Third place + Final
+  {n:103,r:'3P',a:{t:'L',m:101},b:{t:'L',m:102},dt:'07/18/2026 11:00'},
+  {n:104,r:'F', a:{t:'W',m:101},b:{t:'W',m:102},dt:'07/19/2026 09:00'}
+];
+const KO_BY_N={}; KO_DEF.forEach(d=>KO_BY_N[d.n]=d);
+
+let KOpicks={}; // matchNumber -> 'a' | 'b'
+
+function slotCode(spec,n){
+  if(spec.t==='1') return '1'+spec.g;
+  if(spec.t==='2') return '2'+spec.g;
+  if(spec.t==='3') return THIRD_CODE[n];
+  if(spec.t==='W') return 'W'+spec.m;
+  if(spec.t==='L') return 'RU'+spec.m;
+}
+// assign the 8 best thirds to the 8 third-slots respecting allowed groups (bipartite matching)
+function assignThirds(thirds){
+  if(!thirds) return {};
+  const slotTeam=new Array(THIRD_SLOTS.length).fill(-1);
+  function aug(t,vis){
+    for(let s=0;s<THIRD_SLOTS.length;s++){
+      if(THIRD_SLOTS[s].allow.includes(thirds[t].group) && !vis[s]){
+        vis[s]=true;
+        if(slotTeam[s]<0 || aug(slotTeam[s],vis)){ slotTeam[s]=t; return true; }
+      }
+    }
+    return false;
+  }
+  for(let t=0;t<thirds.length;t++) aug(t, new Array(THIRD_SLOTS.length).fill(false));
+  const out={}; slotTeam.forEach((t,s)=>{ if(t>=0) out[THIRD_SLOTS[s].n]=thirds[t]; });
+  return out;
+}
+// resolve every match: n -> {a,b,winner,loser}
+function resolveKO(){
+  const qi=qualInfo();
+  const thirdAssign=assignThirds(qi.thirds);
+  const res={};
+  function slot(spec,n){
+    if(spec.t==='1'){ return qi.winner[spec.g] || {placeholder:slotCode(spec,n)}; }
+    if(spec.t==='2'){ return qi.runner[spec.g] || {placeholder:slotCode(spec,n)}; }
+    if(spec.t==='3'){ return thirdAssign[n]   || {placeholder:slotCode(spec,n)}; }
+    if(spec.t==='W'){ const r=res[spec.m]; return (r&&r.winner) || {placeholder:slotCode(spec,n)}; }
+    if(spec.t==='L'){ const r=res[spec.m]; return (r&&r.loser)  || {placeholder:slotCode(spec,n)}; }
+  }
+  for(const d of KO_DEF){
+    const a=slot(d.a,d.n), b=slot(d.b,d.n);
+    const pk=KOpicks[d.n];
+    let winner=null, loser=null;
+    if(pk==='a' && !a.placeholder){ winner=a; loser=b.placeholder?null:b; }
+    else if(pk==='b' && !b.placeholder){ winner=b; loser=a.placeholder?null:a; }
+    res[d.n]={a,b,winner,loser};
+  }
+  return res;
 }
 
-function pick(matchId, side){
-  KO.picks[matchId]=side;
-  // clear downstream picks that depend on this (simplest: clear all later rounds whose source changed)
-  // Easy approach: just re-render; stale downstream picks may reference replaced teams but get overwritten on next pick.
-  renderBracket();
-}
-function resetKnockout(){ if(KO){KO.picks={};} renderBracket(); }
+function pick(n, side){ KOpicks[n]= KOpicks[n]===side ? null : side; renderBracket(); }
+function resetKnockout(){ KOpicks={}; renderBracket(); }
 
 /* ============================================================
    BRACKET RENDER (SVG)  — also used for PNG export
    ============================================================ */
-const BOX_W=178, BOX_H=46, ROW=70;
+const BOX_W=176, ROWH=23, BOX_H=ROWH*2, ROW=104, COLGAP=BOX_W+58;
+// vertical order of match numbers per column, each side (top -> bottom)
+const LEFT_COLS=[[74,77,73,75,83,84,81,82],[89,90,93,94],[97,98],[101]];
+const RIGHT_COLS=[[76,78,79,80,86,88,85,87],[91,92,95,96],[99,100],[102]];
+const ROUND_NAME={R32:'Round of 32',R16:'Round of 16',QF:'Quarter-final',SF:'Semi-final',F:'Final','3P':'Third place'};
+
 function buildSvg(){
-  const R=roundTeams();
-  // x columns: left R32,R16,QF,SF ; center final ; right SF,QF,R16,R32
-  const colX=[20, 20+ (BOX_W+44), 20+2*(BOX_W+44), 20+3*(BOX_W+44)];
-  const finalX=20+3.5*(BOX_W+44)+30;
-  const totalW= finalX*2 - 20 - BOX_W + 40 + 60;
-  const W = colX[3] + BOX_W + 4*(BOX_W+44) - (BOX_W+44) + 40; // recompute below cleanly
-  // We'll lay out explicitly.
-  const leftR32y = R.r32.slice(0,8).map((_,i)=>i*ROW+30);
-  // helper to average children y
-  function parentY(ys){ return ys.map((_,i)=> (ys[2*i]+ys[2*i+1])/2 ); }
-  const leftR16y=parentY(leftR32y);
-  const leftQFy=parentY(leftR16y);
-  const leftSFy=parentY(leftQFy);
-  const rightR32y=R.r32.slice(8,16).map((_,i)=>i*ROW+30);
-  const rightR16y=parentY(rightR32y);
-  const rightQFy=parentY(rightR16y);
-  const rightSFy=parentY(rightQFy);
-  const height=8*ROW+60;
+  const res=resolveKO();
+  function parentY(ys){ const o=[]; for(let i=0;i<ys.length/2;i++) o.push((ys[2*i]+ys[2*i+1])/2); return o; }
+  const topPad=88;
+  const leafY=i=>topPad+i*ROW;
+  const Ly=[LEFT_COLS[0].map((_,i)=>leafY(i))]; for(let c=1;c<4;c++) Ly.push(parentY(Ly[c-1]));
+  const Ry=[RIGHT_COLS[0].map((_,i)=>leafY(i))]; for(let c=1;c<4;c++) Ry.push(parentY(Ry[c-1]));
+  const height=topPad+8*ROW+30;
 
-  const LX=[20, 20+BOX_W+50, 20+2*(BOX_W+50), 20+3*(BOX_W+50)];
-  const fX=20+4*(BOX_W+50)+10;
-  const RX=[fX+BOX_W+50+3*(BOX_W+50), 0,0,0]; // we mirror
-  const rcol=[ fX+BOX_W+50+3*(BOX_W+50), fX+BOX_W+50+2*(BOX_W+50), fX+BOX_W+50+(BOX_W+50), fX+BOX_W+50 ];
-  const width= rcol[0]+BOX_W+30;
-  const finalY=height/2-BOX_H/2-30;
+  const LX=[20, 20+COLGAP, 20+2*COLGAP, 20+3*COLGAP];
+  const fX=LX[3]+COLGAP+24;
+  const rcol=[fX+BOX_W+24+3*COLGAP, fX+BOX_W+24+2*COLGAP, fX+BOX_W+24+COLGAP, fX+BOX_W+24];
+  const width=rcol[0]+BOX_W+20;
+  const finalY=Ly[3][0];
 
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height+90}" viewBox="0 0 ${width} ${height+90}" font-size="13">`;
-  s+=`<rect x="0" y="0" width="${width}" height="${height+90}" fill="#0a1226"/>`;
-  s+=`<text x="${width/2}" y="30" fill="#e6ecff" font-size="22" font-weight="700" text-anchor="middle">FIFA World Cup 2026 — Knockout Bracket</text>`;
-  const offY=46;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(width)}" height="${Math.round(height)}" viewBox="0 0 ${Math.round(width)} ${Math.round(height)}" font-size="13">`;
+  s+=`<rect x="0" y="0" width="${Math.round(width)}" height="${Math.round(height)}" fill="#0a1226"/>`;
+  s+=`<text x="${width/2}" y="34" fill="#e6ecff" font-size="22" font-weight="700" text-anchor="middle">FIFA World Cup 2026 — Knockout Bracket</text>`;
 
-  const boxes=[]; // collect for click overlay {x,y,id,side}
-  function drawMatch(x,y,m,anchorRight){
-    const w= m.a, l=m.b;
-    const win=KO.picks[m.id];
-    s+=drawTeam(x,y,m.a,win==='a',m.id,'a');
-    s+=drawTeam(x,y+BOX_H/2,m.b,win==='b',m.id,'b');
-    s+=`<rect x="${x}" y="${y}" width="${BOX_W}" height="${BOX_H}" fill="none" stroke="#2c3a63"/>`;
-    s+=`<line x1="${x}" y1="${y+BOX_H/2}" x2="${x+BOX_W}" y2="${y+BOX_H/2}" stroke="#2c3a63"/>`;
-    boxes.push({x,y,id:m.id,side:'a'});boxes.push({x,y:y+BOX_H/2,id:m.id,side:'b'});
-  }
-  function label(t){
-    if(!t) return ['','',''];
-    if(t.placeholder) return ['', t.placeholder, ''];
-    return [t.flag||'', t.name||t.label||'', ''];
-  }
-  function drawTeam(x,y,t,isWin,id,side){
-    const [flag,name]=label(t);
+  const boxes=[];
+  function teamLine(x,y,t,isWin,clickable){
     const fill= isWin? '#16633f' : '#101a30';
-    const tcol= t&&!t.placeholder? '#e6ecff':'#7c8db5';
-    let r=`<g><rect x="${x}" y="${y}" width="${BOX_W}" height="${BOX_H/2}" fill="${fill}"/>`;
-    r+=`<text x="${x+8}" y="${y+BOX_H/4+4}" fill="${tcol}">${esc(flag)} ${esc(truncate(name,16))}</text></g>`;
+    const tcol= (t&&!t.placeholder)? '#e6ecff' : '#7c8db5';
+    const txt = (t&&!t.placeholder)? `${t.flag||''} ${truncate(t.name,15)}` : (t.placeholder||'');
+    let r=`<rect x="${x}" y="${y}" width="${BOX_W}" height="${ROWH}" fill="${fill}"${clickable?' style="cursor:pointer"':''}/>`;
+    r+=`<text x="${x+8}" y="${y+ROWH/2+4}" fill="${tcol}">${esc(txt)}</text>`;
     return r;
+  }
+  function drawMatch(x,y,n){
+    const d=KO_BY_N[n], m=res[n];
+    const win=KOpicks[n];
+    const [date,time]=d.dt.split(' ');
+    // date/time above
+    s+=`<text x="${x+BOX_W/2}" y="${y-7}" fill="#9fb3da" font-size="10.5" text-anchor="middle">M${n} · ${date} ${time}</text>`;
+    // two team rows
+    const aClick=!m.a.placeholder, bClick=!m.b.placeholder;
+    s+=teamLine(x,y,m.a,win==='a',aClick);
+    s+=teamLine(x,y+ROWH,m.b,win==='b',bClick);
+    s+=`<rect x="${x}" y="${y}" width="${BOX_W}" height="${BOX_H}" fill="none" stroke="#2c3a63"/>`;
+    s+=`<line x1="${x}" y1="${y+ROWH}" x2="${x+BOX_W}" y2="${y+ROWH}" stroke="#2c3a63"/>`;
+    // criteria caption below
+    const cap=`${slotCode(d.a,n)} v ${slotCode(d.b,n)}`;
+    s+=`<text x="${x+BOX_W/2}" y="${y+BOX_H+13}" fill="#6f82ad" font-size="10" text-anchor="middle">${esc(cap)}</text>`;
+    boxes.push({x,y,n,side:'a'}); boxes.push({x,y:y+ROWH,n,side:'b'});
   }
   function connect(x1,y1,x2,y2){ s+=`<path d="M${x1},${y1} H${(x1+x2)/2} V${y2} H${x2}" fill="none" stroke="#3a4a78"/>`; }
 
-  // LEFT side
-  const Ly=[leftR32y,leftR16y,leftQFy,leftSFy];
-  const Lrounds=[R.r32.slice(0,8),R.r16.slice(0,4),R.qf.slice(0,2),R.sf.slice(0,1)];
+  // LEFT side boxes + connectors
   for(let c=0;c<4;c++){
-    Lrounds[c].forEach((m,i)=> drawMatch(LX[c], Ly[c][i]+offY, m, false));
-    if(c<3){ // connectors to next col
-      Lrounds[c+1].forEach((_,i)=>{
-        const ya=Ly[c][2*i]+offY+BOX_H/2, yb=Ly[c][2*i+1]+offY+BOX_H/2;
-        const xr=LX[c]+BOX_W, xn=LX[c+1];
-        connect(xr,ya,xn,Ly[c+1][i]+offY+BOX_H/2);
-        connect(xr,yb,xn,Ly[c+1][i]+offY+BOX_H/2);
-      });
-    }
+    LEFT_COLS[c].forEach((n,i)=> drawMatch(LX[c], Ly[c][i], n));
+    if(c<3) LEFT_COLS[c+1].forEach((_,i)=>{
+      const xr=LX[c]+BOX_W, xn=LX[c+1], yt=Ly[c+1][i]+ROWH;
+      connect(xr,Ly[c][2*i]+ROWH,xn,yt); connect(xr,Ly[c][2*i+1]+ROWH,xn,yt);
+    });
   }
   // RIGHT side
-  const Ry=[rightR32y,rightR16y,rightQFy,rightSFy];
-  const Rrounds=[R.r32.slice(8,16),R.r16.slice(4,8),R.qf.slice(2,4),R.sf.slice(1,2)];
   for(let c=0;c<4;c++){
-    Rrounds[c].forEach((m,i)=> drawMatch(rcol[c], Ry[c][i]+offY, m, true));
-    if(c<3){
-      Rrounds[c+1].forEach((_,i)=>{
-        const ya=Ry[c][2*i]+offY+BOX_H/2, yb=Ry[c][2*i+1]+offY+BOX_H/2;
-        const xl=rcol[c], xn=rcol[c+1]+BOX_W;
-        connect(xl,ya,xn,Ry[c+1][i]+offY+BOX_H/2);
-        connect(xl,yb,xn,Ry[c+1][i]+offY+BOX_H/2);
-      });
-    }
+    RIGHT_COLS[c].forEach((n,i)=> drawMatch(rcol[c], Ry[c][i], n));
+    if(c<3) RIGHT_COLS[c+1].forEach((_,i)=>{
+      const xl=rcol[c], xn=rcol[c+1]+BOX_W, yt=Ry[c+1][i]+ROWH;
+      connect(xl,Ry[c][2*i]+ROWH,xn,yt); connect(xl,Ry[c][2*i+1]+ROWH,xn,yt);
+    });
   }
-  // FINAL center
-  const finM=R.fin[0];
-  drawMatch(fX, finalY+offY, finM, false);
-  s+=`<text x="${fX+BOX_W/2}" y="${finalY+offY-8}" fill="#f5c542" font-size="14" font-weight="700" text-anchor="middle">FINAL</text>`;
-  // connectors SF->final
-  connect(LX[3]+BOX_W, leftSFy[0]+offY+BOX_H/2, fX, finalY+offY+BOX_H/2);
-  connect(rcol[3], rightSFy[0]+offY+BOX_H/2, fX+BOX_W, finalY+offY+BOX_H/2);
-  // champion
-  const champ=R.champ;
-  const cy=finalY+offY+BOX_H+34;
-  s+=`<text x="${fX+BOX_W/2}" y="${cy}" fill="#f5c542" font-size="15" font-weight="700" text-anchor="middle">🏆 ${champ&&!champ.placeholder?esc((champ.flag||'')+' '+champ.name):'Champion'}</text>`;
+  // FINAL + champion + third place
+  drawMatch(fX, finalY, 104);
+  s+=`<text x="${fX+BOX_W/2}" y="${finalY-26}" fill="#f5c542" font-size="15" font-weight="700" text-anchor="middle">FINAL</text>`;
+  connect(LX[3]+BOX_W, Ly[3][0]+ROWH, fX, finalY+ROWH);
+  connect(rcol[3], Ry[3][0]+ROWH, fX+BOX_W, finalY+ROWH);
+  const champ=res[104].winner;
+  s+=`<text x="${fX+BOX_W/2}" y="${finalY+BOX_H+44}" fill="#f5c542" font-size="15" font-weight="700" text-anchor="middle">🏆 ${champ?esc((champ.flag||'')+' '+champ.name):'Champion'}</text>`;
+  s+=`<text x="${fX+BOX_W/2}" y="${finalY+BOX_H+96}" fill="#8da2c8" font-size="11" font-weight="600" text-anchor="middle">Third-place play-off</text>`;
+  drawMatch(fX, finalY+BOX_H+118, 103);
 
   // round headers
-  const heads=['Round of 32','Round of 16','Quarter-final','Semi-final'];
-  heads.forEach((h,c)=>{
-    s+=`<text x="${LX[c]+BOX_W/2}" y="${offY-6}" fill="#8da2c8" text-anchor="middle" font-size="11">${h}</text>`;
-    s+=`<text x="${rcol[c]+BOX_W/2}" y="${offY-6}" fill="#8da2c8" text-anchor="middle" font-size="11">${h}</text>`;
+  [['R32',0],['R16',1],['QF',2],['SF',3]].forEach(([r,c])=>{
+    s+=`<text x="${LX[c]+BOX_W/2}" y="62" fill="#8da2c8" text-anchor="middle" font-size="11">${ROUND_NAME[r]}</text>`;
+    s+=`<text x="${rcol[c]+BOX_W/2}" y="62" fill="#8da2c8" text-anchor="middle" font-size="11">${ROUND_NAME[r]}</text>`;
   });
 
   s+=`</svg>`;
-  return {svg:s,width,height:height+90,boxes};
+  return {svg:s,width:Math.round(width),height:Math.round(height),boxes};
 }
 function truncate(s,n){ s=s||''; return s.length>n? s.slice(0,n-1)+'…':s; }
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function renderThirds(){
-  const q=qualifiers();
+  const qi=qualInfo();
   const box=document.getElementById('thirdsBox');
   const done=LETTERS.filter(groupComplete).length;
-  let html=`<b>Best 3rd-placed teams</b> &nbsp;<span class="legend">(${done}/12 groups complete; need all 12 for final 8)</span><br>`;
-  if(q.thirds.length===0){ html+='<span class="legend">Complete groups to rank third-placed teams.</span>'; }
-  else html+= q.thirds.map((t,i)=>`${i+1}. ${t.flag} ${t.name} <span class="legend">(Grp ${t.group}, ${t.Pts}pts)</span>`).join(' &nbsp;•&nbsp; ');
+  let html=`<b>Best 3rd-placed teams</b> &nbsp;<span class="legend">(${done}/12 groups complete; all 12 needed to lock the 8 qualifiers)</span><br>`;
+  if(!qi.thirds){ html+='<span class="legend">Finish predicting every group to rank the third-placed teams.</span>'; }
+  else html+= qi.thirds.map((t,i)=>`${i+1}. ${t.flag} ${t.name} <span class="legend">(Grp ${t.group}, ${t.Pts}pts)</span>`).join(' &nbsp;•&nbsp; ');
   box.innerHTML=html;
 }
 
 let lastSvg=null;
 function renderBracket(){
-  if(!KO) buildKnockout(); else buildKnockout(); // rebuild from latest group results, keep picks
   renderThirds();
-  const {svg,boxes,width,height}=buildSvg();
+  const {svg,boxes}=buildSvg();
   lastSvg=svg;
   const host=document.getElementById('bracketHost');
   host.innerHTML=svg;
-  // overlay clickable rects
+  // overlay clickable rects (only over slots that have a resolved team)
   const svgEl=host.querySelector('svg');
+  const res=resolveKO();
   boxes.forEach(b=>{
+    const slot=res[b.n][b.side];
+    if(slot.placeholder) return;
     const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
     rect.setAttribute('x',b.x);rect.setAttribute('y',b.y);
-    rect.setAttribute('width',BOX_W);rect.setAttribute('height',BOX_H/2);
+    rect.setAttribute('width',BOX_W);rect.setAttribute('height',ROWH);
     rect.setAttribute('fill','transparent');rect.style.cursor='pointer';
-    rect.addEventListener('click',()=>pick(b.id,b.side));
+    rect.addEventListener('click',()=>pick(b.n,b.side));
     svgEl.appendChild(rect);
   });
 }
